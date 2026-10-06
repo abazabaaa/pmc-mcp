@@ -152,3 +152,25 @@ async def test_retry_before_stream_but_never_restart_partial_bytes():
         with pytest.raises(DomainError, match="source_unavailable"):
             await Reader(client).get(BUCKET + "/metadata/PMC123.2.json")
     assert calls == 1
+
+
+async def test_malformed_converter_versions_is_a_structured_failure():
+    async def handle(request):
+        return httpx2.Response(
+            200, json={"records": [{"requested-id": "PMC123", "pmcid": "PMC123", "versions": None}]}
+        )
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as client:
+        provider = PMC(Reader(client, ncbi_spacing=0))
+        with pytest.raises(DomainError, match="invalid_source_metadata"):
+            await provider.search(normalize_query("PMC123"), ("pdf",), 5, 0)
+
+
+async def test_entity_expansion_in_bucket_listing_is_rejected():
+    async def handle(request):
+        return httpx2.Response(200, content=b'<!DOCTYPE x [<!ENTITY x "expansion">]><x>&x;</x>')
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as client:
+        provider = PMC(Reader(client, ncbi_spacing=0))
+        with pytest.raises(DomainError, match="invalid_source_metadata"):
+            await provider._versions("PMC123")

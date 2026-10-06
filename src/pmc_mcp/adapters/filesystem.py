@@ -79,6 +79,13 @@ class LocalFiles:
                     relative = target.relative_to(prefix)
                 except ValueError:
                     continue
+                try:
+                    current = os.stat(resolved, follow_symlinks=False)
+                    granted = os.fstat(root_fd)
+                except OSError as error:
+                    raise DomainError("destination_denied") from error
+                if (current.st_dev, current.st_ino) != (granted.st_dev, granted.st_ino):
+                    raise DomainError("destination_denied")
                 fd = os.dup(root_fd)
                 try:
                     for part in relative.parts:
@@ -208,8 +215,12 @@ class LocalFiles:
                             if raced is None:
                                 raise DomainError("destination_conflict") from None
                             status = "already_present"
-                        os.fsync(directory)
                         receipt = self._result(status, artifact, target, body)
+                        try:
+                            os.fsync(directory)
+                        except OSError:
+                            # The no-clobber link already committed valid bytes.
+                            receipt = receipt.model_copy(update={"code": "durability_unconfirmed"})
                         return self._receipt(directory, receipt)
                 finally:
                     os.unlink(temp, dir_fd=directory)

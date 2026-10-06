@@ -175,3 +175,42 @@ async def test_conflicting_receipt_does_not_hide_valid_publication(
     assert receipt.code == "receipt_conflict"
     assert sidecar.read_text() == "preserve this unrelated file"
     assert (tmp_path / file_artifact.filename).read_bytes() == pdf_body
+
+
+async def test_directory_rename_does_not_redirect_granted_root(tmp_path, file_artifact, pdf_body):
+    root = tmp_path / "granted"
+    root.mkdir()
+    files = LocalFiles([root])
+    moved = tmp_path / "original-inode"
+    root.rename(moved)
+    root.mkdir()
+    try:
+        with pytest.raises(DomainError, match="destination_denied"):
+            await files.save(file_artifact, chunks(pdf_body), str(root))
+        assert list(moved.iterdir()) == []
+        assert list(root.iterdir()) == []
+    finally:
+        files.close()
+
+
+async def test_directory_sync_failure_reports_committed_bytes(
+    files, tmp_path, file_artifact, pdf_body, monkeypatch
+):
+    import os
+    import stat
+
+    original = os.fsync
+    failed = False
+
+    def fsync(fd):
+        nonlocal failed
+        if stat.S_ISDIR(os.fstat(fd).st_mode) and not failed:
+            failed = True
+            raise OSError("synthetic durability failure")
+        original(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    result = await files.save(file_artifact, chunks(pdf_body), str(tmp_path))
+    assert result.status == "downloaded"
+    assert result.code == "durability_unconfirmed"
+    assert (tmp_path / file_artifact.filename).read_bytes() == pdf_body
