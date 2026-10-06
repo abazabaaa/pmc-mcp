@@ -1,0 +1,44 @@
+[project]
+name = "pmc-mcp"
+version = "0.1.0"
+description = "Local stateless MCP search and scientific artifact retrieval"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp==2.3.0",
+  "httpx2>=2.10.0,<3",
+  "pydantic>=2.12,<3",
+  "pypdf>=6,<7",
+  "defusedxml>=0.7.1,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.4,<10", "pytest-asyncio>=1,<2", "ruff>=0.12,<1", "ty>=0.0.1a17,<1"]
+
+[build-system]
+requires = ["uv_build==0.11.1"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "pmc_mcp"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["reviews", "docs-refresh", "PLAN.md", "OBSERVATIONS.md", "scripts/refresh_stateless_docs.py", "scripts/fetch_release_evidence.py", "scripts/validate_reference.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
+
+[tool.ty.src]
+include = ["src", "tests", "scripts/check_publication.py"]
