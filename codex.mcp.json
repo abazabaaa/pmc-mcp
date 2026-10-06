@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pmc": {
+      "url": "http://127.0.0.1:47836/mcp",
+      "http_headers_helper": "pmc-mcp-plugin-headers",
+      "startup_timeout_sec": 15,
+      "tool_timeout_sec": 130
+    }
+  }
+}

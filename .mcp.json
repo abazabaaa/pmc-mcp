@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pmc": {
+      "type": "http",
+      "url": "http://127.0.0.1:47836/mcp",
+      "headers": {
+        "X-PMCMCP-Output-Root": "${user_config.output_root}"
+      },
+      "headersHelper": "\"${CLAUDE_PLUGIN_ROOT}/scripts/bootstrap.sh\" ensure",
+      "timeout": 120000,
+      "alwaysLoad": true
+    }
+  }
+}

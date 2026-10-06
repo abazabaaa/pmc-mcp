@@ -3,13 +3,23 @@
 import argparse
 import os
 import re
+import runpy
 import subprocess
 import sys
 import tarfile
 import zipfile
 from pathlib import Path
 
-PRIVATE_AREAS = {"reviews", "docs-refresh", ".pmc-mcp", ".venv"}
+PRIVATE_AREAS = {
+    "reviews",
+    "docs-refresh",
+    ".pmc-mcp",
+    ".venv",
+    ".claude",
+    ".codex",
+    "downloads",
+    "plugin-evidence",
+}
 PRIVATE_FILES = {"PLAN.md", "OBSERVATIONS.md", ".env"}
 PATTERNS = (
     re.compile(r"/(?:Users|home)/[A-Za-z0-9_.-]+/"),
@@ -54,13 +64,23 @@ def allowed_member(name: str, *, wheel: bool) -> bool:
 
 
 def check_archives(errors: list[str]) -> None:
-    archives = [*Path("dist").glob("*.whl"), *Path("dist").glob("*.tar.gz")]
+    archives = [
+        *Path("dist").glob("*.whl"),
+        *Path("dist").glob("*.tar.gz"),
+        *Path("dist").glob("*.zip"),
+    ]
+    packager = runpy.run_path(str(Path(__file__).with_name("package_plugin.py")))
+    plugin_names = {
+        str(p.relative_to(packager["ROOT"])) for p in packager["files"](packager["ROOT"])
+    }
+    if not any(a.name == "pmc-mcp-plugin.zip" for a in archives):
+        errors.append("build the plugin ZIP before archive scanning")
     if not any(a.suffix == ".whl" for a in archives) or not any(
         a.name.endswith(".tar.gz") for a in archives
     ):
         errors.append("build both wheel and sdist before archive scanning")
     for archive in archives:
-        if archive.suffix == ".whl":
+        if archive.suffix in {".whl", ".zip"}:
             with zipfile.ZipFile(archive) as wheel:
                 entries = [(n, wheel.read(n)) for n in wheel.namelist() if not n.endswith("/")]
         else:
@@ -75,7 +95,12 @@ def check_archives(errors: list[str]) -> None:
                         continue
                     entries.append((member.name, file.read()))
         for name, body in entries:
-            if not allowed_member(name, wheel=archive.suffix == ".whl") or not safe_text(name):
+            allowed = (
+                name in plugin_names
+                if archive.suffix == ".zip"
+                else allowed_member(name, wheel=archive.suffix == ".whl")
+            )
+            if not allowed or not safe_text(name):
                 errors.append(f"unexpected archive member: {archive.name}: {name}")
             try:
                 content = body.decode("utf-8")

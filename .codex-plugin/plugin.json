@@ -1,0 +1,15 @@
+{
+  "name": "pmc-mcp",
+  "version": "0.1.0",
+  "description": "Search PMC and download chosen artifacts over local Streamable HTTP.",
+  "author": {"name": "pmc-mcp contributors"},
+  "mcpServers": "./codex.mcp.json",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "PMC Local Retrieval",
+    "shortDescription": "Search PMC and download verified artifacts locally.",
+    "developerName": "pmc-mcp contributors",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"]
+  }
+}
