@@ -29,6 +29,7 @@ def safe_text(text: str) -> bool:
         return False
     return all(
         address.endswith("@users.noreply.github.com")
+        or address == "noreply@github.com"
         or address.rsplit("@", 1)[1]
         in {"example.com", "example.org", "example.test", "example.invalid"}
         for address in EMAIL.findall(text)
@@ -50,7 +51,9 @@ def main() -> int:
         if not safe_text(git("cat-file", "-p", oid)):
             errors.append(f"private content in history: {name or oid}")
     for identity in git("log", "--all", "--format=%an <%ae>%n%cn <%ce>").splitlines():
-        if not safe_text(identity) or "@users.noreply.github.com>" not in identity:
+        if not safe_text(identity) or not identity.endswith(
+            ("@users.noreply.github.com>", "<noreply@github.com>")
+        ):
             errors.append("non-anonymous commit identity")
     for error in errors:
         print(error, file=sys.stderr)
