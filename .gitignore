@@ -1,0 +1,27 @@
+# Local research and account-specific evidence are never published.
+/PLAN.md
+/OBSERVATIONS.md
+/reviews/
+/docs-refresh/
+/scripts/refresh_stateless_docs.py
+/scripts/fetch_release_evidence.py
+/scripts/validate_reference.py
+
+# Runtime state, credentials, downloads, and generated files.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
+dist/
+build/
+*.egg-info/
+.env
+.env.*
+!.env.example
+.pmc-mcp/
+*.pdf
+*.receipt.json
+*.log
+.DS_Store
