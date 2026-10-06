@@ -1,0 +1,12 @@
+{
+  "name": "pmc-local",
+  "interface": {"displayName": "PMC Local Retrieval"},
+  "plugins": [
+    {
+      "name": "pmc-mcp",
+      "source": {"source": "local", "path": "./"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}

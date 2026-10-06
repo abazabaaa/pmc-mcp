@@ -25,3 +25,9 @@ build/
 *.receipt.json
 *.log
 .DS_Store
+
+# Host installation settings and local artifact folders.
+/.claude/
+/.codex/
+/downloads/
+/plugin-evidence/

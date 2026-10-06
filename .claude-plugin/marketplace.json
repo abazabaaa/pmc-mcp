@@ -1,0 +1,14 @@
+{
+  "name": "pmc-local",
+  "owner": {
+    "name": "pmc-mcp contributors"
+  },
+  "plugins": [
+    {
+      "name": "pmc-mcp",
+      "source": "./",
+      "description": "Local verified PMC artifact retrieval."
+    }
+  ],
+  "description": "Local scientific artifact retrieval plugins."
+}

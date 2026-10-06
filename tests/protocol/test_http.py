@@ -15,7 +15,7 @@ BEARER = "fixture-only-credential"
 
 
 @asynccontextmanager
-async def process(root, *, slow=False):
+async def process(root, *, slow=False, header_grants=False):
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -29,6 +29,8 @@ async def process(root, *, slow=False):
     ]
     if slow:
         command.append("--slow")
+    if header_grants:
+        command.append("--header-grants")
     with (root / "server.log").open("wb") as log:
         child = subprocess.Popen(command, stdout=log, stderr=log)
         try:
@@ -57,14 +59,14 @@ async def process(root, *, slow=False):
 
 
 @asynccontextmanager
-async def connect(url, *, mode="auto", observed=None):
+async def connect(url, *, mode="auto", observed=None, headers=None):
     async def observe(response):
         if observed is not None:
             observed.append((response.status_code, dict(response.headers)))
 
     async with (
         httpx2.AsyncClient(
-            headers={"Authorization": f"Bearer {BEARER}"},
+            headers={"Authorization": f"Bearer {BEARER}", **(headers or {})},
             trust_env=False,
             event_hooks={"response": [observe]},
         ) as http,
@@ -176,5 +178,61 @@ async def test_modern_cancellation_and_legacy_completion(tmp_path, mode):
             assert not list(tmp_path.glob("*.pdf"))
         else:
             assert (tmp_path / "finished").exists()
+            # Stream closure precedes verification in a worker thread and publication.
+            await wait_for(tmp_path / "PMC123.2-main.pdf.receipt.json")
             assert len(list(tmp_path.glob("*.pdf"))) == 1
         assert not list(tmp_path.glob(".pmc-*"))
+
+
+@pytest.mark.parametrize("mode", ["auto", "legacy"])
+async def test_human_header_grants_remain_request_scoped(tmp_path, mode):
+    a = tmp_path / "folder A"
+    b = tmp_path / "folder B"
+    a.mkdir()
+    b.mkdir()
+    async with process(tmp_path, slow=True, header_grants=True) as url:
+
+        async def download(grant, destination):
+            async with connect(
+                url, mode=mode, headers={"X-PMCMCP-Output-Root": str(grant)}
+            ) as client:
+                result = await client.call_tool("search_artifacts", {"query": "PMC123.2"})
+                return await client.call_tool(
+                    "download_artifacts",
+                    {
+                        "selection_tokens": [
+                            result.structured_content["choices"][0]["selection_token"]
+                        ],
+                        "output_dir": str(destination),
+                    },
+                )
+
+        outcomes = await asyncio.gather(download(a, a), download(b, b))
+        assert all(r.structured_content["receipts"][0]["status"] == "downloaded" for r in outcomes)
+        assert (a / "PMC123.2-main.pdf").is_file()
+        assert (b / "PMC123.2-main.pdf").is_file()
+        denied = await download(a, b)
+        assert denied.structured_content["receipts"][0]["code"] == "destination_denied"
+        async with connect(url, mode=mode) as client:
+            choices = await client.call_tool("search_artifacts", {"query": "PMC123.2"})
+            missing = await client.call_tool(
+                "download_artifacts",
+                {
+                    "selection_tokens": [
+                        choices.structured_content["choices"][0]["selection_token"]
+                    ],
+                    "output_dir": str(a),
+                },
+            )
+            assert missing.structured_content["receipts"][0]["code"] == "destination_not_configured"
+        async with httpx2.AsyncClient(trust_env=False) as http:
+            duplicate = await http.post(
+                url,
+                headers=[
+                    ("Authorization", f"Bearer {BEARER}"),
+                    ("X-PMCMCP-Output-Root", str(a)),
+                    ("X-PMCMCP-Output-Root", str(b)),
+                ],
+                json={},
+            )
+            assert duplicate.status_code == 400

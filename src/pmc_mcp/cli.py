@@ -3,6 +3,8 @@
 import argparse
 import asyncio
 import json
+import os
+import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -15,6 +17,8 @@ from pmc_mcp.adapters.pmc import PMC
 from pmc_mcp.application import Application
 from pmc_mcp.domain.models import Artifact, Receipt
 from pmc_mcp.domain.rules import DomainError
+from pmc_mcp.plugin import HeaderFiles
+from pmc_mcp.plugin_runtime import PORT, configure, configured_root, endpoint_port, ensure, stop
 from pmc_mcp.server import create_app
 from pmc_mcp.state import secret
 
@@ -31,7 +35,16 @@ def parser() -> argparse.ArgumentParser:
         prog="pmc-mcp", description="Local PMC search and verified artifact downloads"
     )
     commands = result.add_subparsers(dest="command", required=True)
-    for command in ("serve", "search", "download", "init"):
+    for command in (
+        "serve",
+        "plugin-serve",
+        "ensure",
+        "stop",
+        "configure",
+        "search",
+        "download",
+        "init",
+    ):
         item = commands.add_parser(command)
         item.add_argument("--state-dir", type=Path, default=Path.home() / ".local/state/pmc-mcp")
         item.add_argument(
@@ -41,8 +54,17 @@ def parser() -> argparse.ArgumentParser:
         )
         if command in {"serve", "download"}:
             item.add_argument("--allow-output-root", type=Path, action="append", required=True)
-        if command == "serve":
-            item.add_argument("--port", type=int, default=8000)
+        if command in {"serve", "plugin-serve", "ensure", "stop"}:
+            item.add_argument("--port", type=int, default=8000 if command == "serve" else PORT)
+        if command == "configure":
+            item.add_argument("--output-root", type=Path, required=True)
+        if command == "ensure":
+            item.add_argument("--configured-root", action="store_true")
+        if command == "plugin-serve":
+            item.add_argument("--instance-id", required=True)
+            item.add_argument("--build-id", required=True)
+        if command in {"ensure", "stop"}:
+            item.add_argument("--project-root", type=Path, required=True)
         if command == "search":
             item.add_argument("query")
             item.add_argument("--kind", choices=["pdf", "jats"], action="append")
@@ -55,6 +77,19 @@ def parser() -> argparse.ArgumentParser:
 
 
 async def run(args: argparse.Namespace) -> int:
+    if args.command == "configure":
+        configure(args.state_dir, args.output_root)
+        return 0
+    if args.command in {"ensure", "stop"}:
+        port = endpoint_port(os.environ.get("CLAUDE_CODE_MCP_SERVER_URL"), args.port)
+        if args.command == "ensure":
+            headers = ensure(args.state_dir, args.project_root, port)
+            if args.configured_root:
+                headers["X-PMCMCP-Output-Root"] = configured_root(args.state_dir)
+            print(json.dumps(headers))
+        else:
+            stop(args.state_dir, args.project_root, port)
+        return 0
     key = secret(args.state_dir, "signing.key", 32)
     bearer = secret(args.state_dir, "bearer.key", 32).hex()
     if args.command == "init":
@@ -76,13 +111,23 @@ async def run(args: argparse.Namespace) -> int:
             timeout=httpx2.Timeout(20, connect=5), trust_env=False, follow_redirects=False
         ) as client:
             app = Application(
-                PMC(Reader(client), contact_email=args.contact_email), files or NoDestination(), key
+                PMC(Reader(client), contact_email=args.contact_email),
+                HeaderFiles() if args.command == "plugin-serve" else (files or NoDestination()),
+                key,
             )
-            if args.command == "serve":
+            if args.command in {"serve", "plugin-serve"}:
                 if not 1 <= args.port <= 65535:
                     raise DomainError("invalid_port")
                 config = uvicorn.Config(
-                    create_app(app, bearer), host="127.0.0.1", port=args.port, log_level="warning"
+                    create_app(
+                        app,
+                        bearer,
+                        instance_id=getattr(args, "instance_id", None),
+                        build_id=getattr(args, "build_id", None),
+                    ),
+                    host="127.0.0.1",
+                    port=args.port,
+                    log_level="warning",
                 )
                 await uvicorn.Server(config).serve()
                 return 0
@@ -105,7 +150,10 @@ def main() -> None:
     try:
         code = asyncio.run(run(args))
     except DomainError as error:
-        print(json.dumps({"status": "failed", "code": error.code}))
+        print(
+            json.dumps({"status": "failed", "code": error.code}),
+            file=sys.stderr if args.command in {"ensure", "stop", "plugin-serve"} else sys.stdout,
+        )
         code = 1
     except KeyboardInterrupt:
         code = 130

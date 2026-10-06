@@ -12,6 +12,7 @@ from pypdf import PdfWriter
 from pmc_mcp.adapters.filesystem import LocalFiles
 from pmc_mcp.application import Application
 from pmc_mcp.domain.models import Artifact, CatalogPage, Query
+from pmc_mcp.plugin import HeaderFiles
 from pmc_mcp.server import create_app
 
 KEY = b"synthetic-fixture-key-32-bytes-0000"
@@ -62,11 +63,21 @@ def main():
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--slow", action="store_true")
+    parser.add_argument("--header-grants", action="store_true")
     args = parser.parse_args()
     files = LocalFiles([args.root])
     try:
-        app = Application(FixtureProvider(args.root, args.slow), files, KEY)
-        uvicorn.run(create_app(app, BEARER), host="127.0.0.1", port=args.port, log_level="error")
+        app = Application(
+            FixtureProvider(args.root, args.slow),
+            HeaderFiles() if args.header_grants else files,
+            KEY,
+        )
+        uvicorn.run(
+            create_app(app, BEARER, instance_id="fixture" if args.header_grants else None),
+            host="127.0.0.1",
+            port=args.port,
+            log_level="error",
+        )
     finally:
         files.close()
 

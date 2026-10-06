@@ -4,6 +4,16 @@ Search PMC, choose an exact paper artifact, and save verified files into a folde
 
 No hosted server, cloud credentials, object-store cache, or external state service is needed. The provider reads public NCBI services and the official anonymous PMC content bucket. The first version supports main-article PDF and JATS XML on macOS/Linux.
 
+## Claude Code and Codex plugins
+
+Install the local HTTP plugin and its runtime with the host-specific setup script. Start a fresh host session after installation. See [plugin setup, lifecycle, and evidence](docs/plugins.md).
+
+```sh
+mkdir -p downloads
+./scripts/install-claude.sh "$PWD/downloads"
+./scripts/install-codex.sh "$PWD/downloads"
+```
+
 ## Run locally
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then from this checkout:
