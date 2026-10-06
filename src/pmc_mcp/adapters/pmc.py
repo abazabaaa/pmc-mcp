@@ -5,6 +5,7 @@ import re
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
 from pydantic import ValidationError
 
 from pmc_mcp.adapters.http import Reader
@@ -118,7 +119,10 @@ class PMC:
         if query.kind == "pmid" and str(record.get("pmid", "")) != query.value:
             raise DomainError("artifact_identity_mismatch")
         versions: dict[int, bool | None] = {}
-        for version in record.get("versions", []):
+        raw_versions = record.get("versions", [])
+        if not isinstance(raw_versions, list):
+            raise DomainError("invalid_source_metadata")
+        for version in raw_versions:
             if isinstance(version, dict):
                 identifier = str(version.get("pmcid", ""))
                 match = re.fullmatch(re.escape(pmcid) + r"\.([1-9]\d*)", identifier)
@@ -131,7 +135,7 @@ class PMC:
         raw = await self.reader.get(url)
         try:
             root = ElementTree.fromstring(raw)
-        except (ValueError, ElementTree.ParseError) as error:
+        except (ValueError, ElementTree.ParseError, DefusedXmlException) as error:
             raise DomainError("invalid_source_metadata") from error
         versions = []
         for node in root.iter():

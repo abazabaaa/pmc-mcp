@@ -1,9 +1,12 @@
 """Fail before publication if tracked files or Git history contain private material."""
 
+import argparse
 import os
 import re
 import subprocess
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 
 PRIVATE_AREAS = {"reviews", "docs-refresh", ".pmc-mcp", ".venv"}
@@ -36,7 +39,57 @@ def safe_text(text: str) -> bool:
     )
 
 
+def allowed_member(name: str, *, wheel: bool) -> bool:
+    path = Path(name)
+    if path.is_absolute() or ".." in path.parts:
+        return False
+    if wheel:
+        return (name.startswith("pmc_mcp/") and name.endswith(".py")) or (
+            len(path.parts) == 2 and path.parts[0].endswith(".dist-info")
+        )
+    relative = str(Path(*path.parts[1:]))
+    return relative in {"pyproject.toml", "README.md", "PKG-INFO"} or (
+        relative.startswith("src/pmc_mcp/") and name.endswith(".py")
+    )
+
+
+def check_archives(errors: list[str]) -> None:
+    archives = [*Path("dist").glob("*.whl"), *Path("dist").glob("*.tar.gz")]
+    if not any(a.suffix == ".whl" for a in archives) or not any(
+        a.name.endswith(".tar.gz") for a in archives
+    ):
+        errors.append("build both wheel and sdist before archive scanning")
+    for archive in archives:
+        if archive.suffix == ".whl":
+            with zipfile.ZipFile(archive) as wheel:
+                entries = [(n, wheel.read(n)) for n in wheel.namelist() if not n.endswith("/")]
+        else:
+            with tarfile.open(archive) as sdist:
+                entries = []
+                for member in sdist.getmembers():
+                    if member.isdir():
+                        continue
+                    file = sdist.extractfile(member) if member.isfile() else None
+                    if file is None:
+                        errors.append(f"non-regular archive member: {archive.name}")
+                        continue
+                    entries.append((member.name, file.read()))
+        for name, body in entries:
+            if not allowed_member(name, wheel=archive.suffix == ".whl") or not safe_text(name):
+                errors.append(f"unexpected archive member: {archive.name}: {name}")
+            try:
+                content = body.decode("utf-8")
+            except UnicodeError:
+                errors.append(f"binary archive member: {archive.name}: {name}")
+                continue
+            if not safe_text(content):
+                errors.append(f"private archive content: {archive.name}: {name}")
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--archives", action="store_true")
+    args = parser.parse_args()
     errors: list[str] = []
     for name in git("ls-files").splitlines():
         path = Path(name)
@@ -55,11 +108,13 @@ def main() -> int:
             ("@users.noreply.github.com>", "<noreply@github.com>")
         ):
             errors.append("non-anonymous commit identity")
+    if args.archives:
+        check_archives(errors)
     for error in errors:
         print(error, file=sys.stderr)
     if errors:
         return 1
-    print("Publication scan passed: tracked content, history, and commit identities")
+    print("Publication scan passed: content, history, identities, and requested archives")
     return 0
 
 
