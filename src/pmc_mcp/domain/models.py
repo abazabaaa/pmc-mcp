@@ -28,6 +28,7 @@ class Artifact(Value):
     pmid: str | None = None
     authors: tuple[str, ...] = ()
     year: str | None = None
+    citation: str | None = None
     license_code: str | None = None
     manuscript: bool | None = None
     retracted: bool | None = None
@@ -59,6 +60,12 @@ class Choice(Value):
 class Notice(Value):
     code: str
     pmcid: str | None = None
+
+
+class CatalogPage(Value):
+    artifacts: tuple[Artifact, ...] = ()
+    notices: tuple[Notice, ...] = ()
+    next_offset: int | None = None
 
 
 class SearchResult(Value):
