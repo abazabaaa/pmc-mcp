@@ -178,6 +178,8 @@ async def test_modern_cancellation_and_legacy_completion(tmp_path, mode):
             assert not list(tmp_path.glob("*.pdf"))
         else:
             assert (tmp_path / "finished").exists()
+            # Stream closure precedes verification in a worker thread and publication.
+            await wait_for(tmp_path / "PMC123.2-main.pdf.receipt.json")
             assert len(list(tmp_path.glob("*.pdf"))) == 1
         assert not list(tmp_path.glob(".pmc-*"))
 
