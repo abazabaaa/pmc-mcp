@@ -10,7 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_both_hosts_declare_http_and_no_embedded_credentials():
-    claude = json.loads((ROOT / ".mcp.json").read_text())["mcpServers"]["pmc"]
+    assert not (ROOT / ".mcp.json").exists(), "project discovery shadows plugin authentication"
+    manifest = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
+    assert manifest["mcpServers"] == "./claude.mcp.json"
+    claude = json.loads((ROOT / "claude.mcp.json").read_text())["mcpServers"]["pmc"]
     codex = json.loads((ROOT / "codex.mcp.json").read_text())["mcpServers"]["pmc"]
     assert claude["type"] == "http"
     assert claude["url"] == codex["url"] == "http://127.0.0.1:47836/mcp"

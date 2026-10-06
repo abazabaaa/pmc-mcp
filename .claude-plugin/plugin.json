@@ -1,8 +1,10 @@
 {
   "name": "pmc-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Search PMC, choose exact artifacts, and download verified files locally.",
-  "author": {"name": "pmc-mcp contributors"},
+  "author": {
+    "name": "pmc-mcp contributors"
+  },
   "repository": "https://github.com/abazabaaa/pmc-mcp",
   "userConfig": {
     "output_root": {
@@ -11,5 +13,6 @@
       "description": "Existing absolute folder granted for artifact downloads on this computer.",
       "required": true
     }
-  }
+  },
+  "mcpServers": "./claude.mcp.json"
 }
