@@ -11,11 +11,15 @@ mkdir -p downloads
 ./scripts/install-claude.sh "$PWD/downloads"
 ```
 
-This prepares the locked Python runtime outside the plugin directory, registers the local marketplace, and installs `pmc-mcp@pmc-local` at user scope with an existing absolute download folder. Start a fresh Claude session. The `/pmc-mcp:retrieve` skill explains search, explicit choices, and downloads. Native `/plugin configure pmc-mcp@pmc-local` can change the folder later.
+This prepares the locked Python runtime outside the plugin directory, registers the local marketplace, and installs or upgrades `pmc-mcp@pmc-local` at user scope with an existing absolute download folder. Start a fresh Claude session. The `/pmc-mcp:retrieve` skill explains search, explicit choices, and downloads. Native `/plugin configure pmc-mcp@pmc-local` can change the folder later.
 
-Claude's `.claude-plugin/plugin.json` declares a required directory option. `.mcp.json` sends that human-owned value in `X-PMCMCP-Output-Root`; the helper supplies bearer authentication. The folder is never interpolated into a shell command. Download arguments must stay within the root carried by that request. Ordinary CLI `serve --allow-output-root` retains its separate, fixed launch grants and ignores the plugin folder header.
+Claude's `.claude-plugin/plugin.json` declares a required directory option. `claude.mcp.json` sends that human-owned value in `X-PMCMCP-Output-Root`; the helper supplies bearer authentication. The folder is never interpolated into a shell command. Download arguments must stay within the root carried by that request. Ordinary CLI `serve --allow-output-root` retains its separate, fixed launch grants and ignores the plugin folder header.
 
 The connection helper is the readiness gate: it serializes startup, refuses foreign listeners, verifies authenticated installation/build identity, and reuses the existing service. A helper runs on connection/reconnection, with a ten-second host limit. Python dependencies are preinstalled by the setup script; network-dependent cold installation can exceed the helper limit, so use setup before the first session. No hook ordering is assumed and no hooks are bundled.
+
+The manifest explicitly names `claude.mcp.json`. Keep the repository root free of `.mcp.json`: Claude loads that filename as a project server, which takes precedence over a plugin at the same endpoint and cannot expand plugin-only authentication variables. Version 0.1.1 corrects this collision and the installer upgrades an existing cached package.
+
+If startup reports `Dynamic Client Registration rejected (HTTP 401)`, inspect which server is loaded. This deployment uses a private bearer helper, not OAuth registration. Re-authentication cannot repair a project entry that shadows the plugin. Re-run the installer, then start a fresh session; `/mcp` should identify `plugin:pmc-mcp:pmc`. To check service readiness, use `./scripts/bootstrap.sh ensure` and treat its stdout as a credential channel; do not paste it into a conversation or log. A bare `uv run pmc-mcp ensure` lacks the required project-root argument.
 
 Validate both manifests:
 
@@ -64,10 +68,12 @@ Live installed-plugin acceptance completed on October 6, 2026:
 
 | Host | Search | Fresh PDF | Retry | Outside configured folder |
 | --- | --- | --- | --- | --- |
-| Claude Code 2.1.292 | `ok`, actual plugin tools | `downloaded` | `already_present` | `destination_denied` |
+| Claude Code 2.1.292, plugin 0.1.1 | `ok`, actual installed plugin tools under normal project discovery | `downloaded` | `already_present` | `destination_denied` |
 | Codex CLI 0.160.1 | `ok`, actual plugin tools | `downloaded` | `already_present` | `destination_denied` |
 
-Both clients retrieved explicit expression `PMC6404399.1`. Independent filesystem read-back matched each receipt: 2,920,820 bytes, SHA-256 `fc46e5cab70594aab3170dbf41e5399277b673d7a8c10c6632dd068d260ce954`. The denied destination remained empty. Raw transcripts, host settings, and machine paths are excluded from publication.
+The earlier isolated Claude probe did not exercise project/plugin precedence or verify that the installed cache matched the checkout. The 0.1.1 rerun reproduced the original 401 before the fix and verified its absence after an actual cache upgrade. A quoted `"Sturnus vulgaris"` search returned real choices; the selected starling PDF was saved under the configured temporary folder. Search limits are 1–5; quote characters alone are accepted, but the original failing CLI arguments are unknown.
+
+Both clients retrieved expression `PMC6404399.1`. Independent filesystem read-back matched each receipt: 2,920,820 bytes, SHA-256 `fc46e5cab70594aab3170dbf41e5399277b673d7a8c10c6632dd068d260ce954`. The denied destination remained empty. Raw transcripts, host settings, and machine paths are excluded from publication.
 
 Codex's test used a temporary approval override for this plugin's download tool only; normal installation preserves the user's approval policy. These headless host tests verify the installed plugin connection and workflow, not interactive desktop UI or host-specific cancellation. Cancellation evidence remains the separate modern/legacy wire tests. The wider manually checked provider corpus remains pending.
 

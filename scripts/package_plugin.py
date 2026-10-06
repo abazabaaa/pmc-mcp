@@ -10,7 +10,7 @@ FIXED = (
     "README.md",
     "pyproject.toml",
     "uv.lock",
-    ".mcp.json",
+    "claude.mcp.json",
     "codex.mcp.json",
     ".claude-plugin/plugin.json",
     ".claude-plugin/marketplace.json",
